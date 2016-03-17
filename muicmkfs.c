@@ -15,10 +15,42 @@
 #include <unistd.h>
 #include "muicfs.h"
 
+
 int
 myformat(const char *filename, int size)
 {
   /* You need to fill this code in*/
+  int my_fd = open(filename, O_WRONLY | O_TRUNC);
+  if (my_fd < 0){
+    return -1;
+  }
+  //sblock info
+  const char fs_name[28] = "SeaIceFS";
+  int root_inode_num = 2;
+  int total_inodes = 256 //can store maximum of 256 files
+  
+
+  //storing sblock info into fs image before init
+  char *my_buf =  (char *) malloc(64);
+  for (int i = 0; i < sizeof(fs_name); i++){
+    *my_buf = fs_name[i];
+     my_buf++;
+  }
+  *my_buf = root_inode_num;
+  my_buf += sizeof(int);
+  *my_buf = size;
+  my_buf += sizeof(int);
+  *my_buf = total_inodes;
+
+  if ( (dwrite(my_fd, 0, my_buf)) == -1) {
+    printf("your disk image crashed\n");
+  }
+  free(my_buf);
+
+  if (close(my_fd) < 0 ) {
+    return - 1;
+  }
+
   return 0;
 }
 

@@ -58,17 +58,26 @@
  * xmp_unmount() method.
  *
  */
+int global_fd = -1;
+
 static void* xmp_mount(struct fuse_conn_info *conn) {
-    //assign super block 
+    global_fd = open(DISKFILE, O_RDWR | O_APPEND);
+    if (global_fd < 0){
+        printf("Mount fail Sea is not happy!!\n");
+        return -1;
+    }
 
+    /*assign imap
+        IMAP will be in block number 1 and 2 
+    */ 
 
-    //assign imap 
+    /*assign dmap 
+        depend on the FS size and how many DBlocks are left over
+    */ 
 
-
-    //assign dmap
-
-
-    //inode
+    /*inode
+        will have a total of 64 blocks to accomodate maximum of 256 files    
+    /*
 
 
     //data block
@@ -86,7 +95,10 @@ static void* xmp_mount(struct fuse_conn_info *conn) {
  *
  */
 static void xmp_unmount (void *private_data) {
-
+    if (close(global_fd) < 0) {
+        printf("Mount fail because Sea is angry\n");
+        return -1
+    }
 }
 
 /**
