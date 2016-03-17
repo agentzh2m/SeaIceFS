@@ -1,0 +1,15 @@
+CFLAGS = -Wall -std=c99
+
+all:	rawdisk.o muicfs muicmkfs
+
+muicfs:		muicfs.c
+	gcc $(CFLAGS) -D_FILE_OFFSET_BITS=64 -I/usr/include/fuse  muicfs.c -o muicfs rawdisk.o -lfuse
+
+muicmkfs:	muicmkfs.c
+	gcc $(CFLAGS) $< -o muicmkfs rawdisk.o
+
+rawdisk.o:	rawdisk.c
+	gcc -c -o rawdisk.o rawdisk.c
+
+clean:
+	rm -f muicfs muicmkfs rawdisk.o
