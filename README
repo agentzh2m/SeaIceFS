@@ -1,0 +1,16 @@
+Assignment 6: A simple FS
+-------------------------
+
+You should use the 'make' command to build your filesystem executable
+and the formatting program.  We have provided skeleton code in
+muicfs.c and muicmkfs.c to get you started.  You will need to fill
+in the stub code as specified by the assignment.
+
+Note that you can pass in the '-d' flag to your FUSE executable to
+produce debugging output that will help you understand what's going on.
+If you do so, however, your program will NOT go into daemon mode, so you
+will need to use another terminal to exercise the directory.  Your
+executable will exit when you unmount the file system.
+
+Tip: You will find a great deal of resources about FUSE on the Web. 
+

@@ -1,0 +1,7 @@
+#!/bin/bash
+cd /tmp
+mkdir `whoami`
+cd `whoami`
+cp ~/Desktop/MyFSys/muicfs/* . 
+mkdir test
+./muicfs -d test
