@@ -62,8 +62,7 @@ static int global_fd = -1;
 int disksize = 0;
 
 static void* xmp_mount(struct fuse_conn_info *conn) {
-    printf("disk file is %s\n", DISKFILE);
-    global_fd = open(DISKFILE, O_RDWR | O_APPEND);
+    global_fd = open(DISKFILE, O_RDWR);
     if (global_fd < 0){
         printf("Mount fail Sea is not happy!! fd_code is %d\n", global_fd);
         return -1;

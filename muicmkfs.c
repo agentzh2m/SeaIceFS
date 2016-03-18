@@ -13,9 +13,10 @@
 #include <fcntl.h>
 #include <string.h>
 #include <unistd.h>
-#include <open.h>
 #include "muicfs.h"
 
+#define DEBUG_ME printf("LINE number: %d\n", __LINE__ );
+#define PRINTPTR(pt) printf("Line num %d, PTR adr is %x \n", __LINE__, pt);
 
 int
 myformat(const char *filename, int size)
@@ -23,7 +24,6 @@ myformat(const char *filename, int size)
   /* You need to fill this code in*/
   int my_fd = open(filename, O_CREAT | O_RDWR, 0x00700);
   if (my_fd < 0){
-    printf("explain open is %d", explain_open(filename, O_CREAT | O_RDWR, 0x00700 ));
     printf("Formatting fail\n");
     return -1;
   }
@@ -41,7 +41,9 @@ myformat(const char *filename, int size)
   
 
   //storing sblock info into fs image before init
-  char *my_buf =  (char *) malloc(64);
+  char *my_buf;
+  my_buf =  (char *) malloc(64);
+  char * buf_ptr = my_buf;
   for (int i = 0; i < sizeof(fs_name); i++){
     *my_buf = fs_name[i];
      my_buf++;
@@ -51,11 +53,10 @@ myformat(const char *filename, int size)
   *my_buf = size;
   my_buf += sizeof(int);
   *my_buf = total_inodes;
-
   if ( (dwrite(my_fd, 0, my_buf)) == -1) {
     printf("your disk image crashed\n");
   }
-  free(my_buf);
+  free(buf_ptr);
   /*assign imap
         IMAP will be in block number 1 and 2 
         3 and 4
@@ -64,21 +65,24 @@ myformat(const char *filename, int size)
         bclk 3 and 192-255 in bclk 4
     */ 
    Bmap * MapPTR;
+   Bmap * initMPTR;
    Bmap myMap;
     //assigning blck 1
+   printf("the size of Bmap is %d \n", sizeof(Bmap));
     for (int i = 0; i < 4; i++){
       MapPTR = (Bmap *) malloc(sizeof(Bmap) * 64);
+      initMPTR = MapPTR;
       for (int j = i * 64; j < 64 + (i * 64); j++){
           myMap.obj_num = j;
           myMap.alloc = 0;
           *MapPTR = myMap;
           MapPTR++;
       }
-      if (dwrite(my_fd, i+1, MapPTR)){
+      if ((dwrite(my_fd, i+1, MapPTR)) == -1){
         printf("assigning imap fail\n");
         return -1;
       }
-      free(MapPTR);
+      free(initMPTR);
     }
      /*assign dmap 
         depend on the FS size and how many DBlocks are left over
@@ -92,17 +96,18 @@ myformat(const char *filename, int size)
     int block_amt = total_entry/64;
     for(int i = 0; i < block_amt; i++){
       MapPTR = (Bmap *) malloc(sizeof(Bmap) * 64);
+      initMPTR = MapPTR;
       for(int j = i * 64; j < 64 + (i * 64); j++ ){
           myMap.obj_num = j;
           myMap.alloc = 0;
           *MapPTR = myMap;
           MapPTR++;
       }
-      if(dwrite(my_fd, i + 70, MapPTR)){
+      if((dwrite(my_fd, i + 70, MapPTR)) == -1){
         printf("assigning Dmap fail\n");
         return -1;
       }
-      free(MapPTR);
+      free(initMPTR);
     }
 
   if (close(my_fd) < 0 ) {

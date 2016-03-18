@@ -19,15 +19,26 @@ int dread(int fd, int blocknum, char *buf);
 int dwrite(int fd, int blocknum, char *buf);
 
 typedef struct InodeStruct {
-	char f_name[28];
-	int * block_pt[16];
+	int * block_pt[16]; //64
 	int ** indir_pt;
-
+	int f_size;
+	int total_size;
+	int total_blck;
+	//Inode will 128 bytes
 } Inode;
 
 typedef struct BitMapStruct 
 {
 	int obj_num;
-	char alloc;
+	char alloc; //1 is alloc, 0 is free
+	//Bitmap will be 8 byte each
 	
 } Bmap;
+
+typedef struct DirStruct
+{
+	char f_name[28];
+	int inode_num;
+	//each entry in dir is 32 byte therefore 1 Direcory will have max of 
+	//16 files except if we link them together (do that later)
+} Direcory;
