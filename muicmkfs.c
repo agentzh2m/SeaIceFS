@@ -13,6 +13,7 @@
 #include <fcntl.h>
 #include <string.h>
 #include <unistd.h>
+#include <open.h>
 #include "muicfs.h"
 
 
@@ -20,14 +21,23 @@ int
 myformat(const char *filename, int size)
 {
   /* You need to fill this code in*/
-  int my_fd = open(filename, O_WRONLY | O_TRUNC);
+  int my_fd = open(filename, O_CREAT | O_RDWR, 0x00700);
   if (my_fd < 0){
+    printf("explain open is %d", explain_open(filename, O_CREAT | O_RDWR, 0x00700 ));
+    printf("Formatting fail\n");
     return -1;
   }
   //sblock info
+  /*
+    byte 0-27 fs_name (char 28)
+    byte 28-31 root_inode_num (int == 4 byte)
+    byte 32-35 size (int == 4 byte)
+    byte 36-39 total_indoes (int == 4 byte)
+
+  */
   const char fs_name[28] = "SeaIceFS";
   int root_inode_num = 2;
-  int total_inodes = 256 //can store maximum of 256 files
+  int total_inodes = 256; //can store maximum of 256 files
   
 
   //storing sblock info into fs image before init
@@ -46,8 +56,57 @@ myformat(const char *filename, int size)
     printf("your disk image crashed\n");
   }
   free(my_buf);
+  /*assign imap
+        IMAP will be in block number 1 and 2 
+        3 and 4
+        total Inode is 256 numbered from 0 to 255
+        0-63 in blck 1, 64-127 in blck 2, 128-191 in
+        bclk 3 and 192-255 in bclk 4
+    */ 
+   Bmap * MapPTR;
+   Bmap myMap;
+    //assigning blck 1
+    for (int i = 0; i < 4; i++){
+      MapPTR = (Bmap *) malloc(sizeof(Bmap) * 64);
+      for (int j = i * 64; j < 64 + (i * 64); j++){
+          myMap.obj_num = j;
+          myMap.alloc = 0;
+          *MapPTR = myMap;
+          MapPTR++;
+      }
+      if (dwrite(my_fd, i+1, MapPTR)){
+        printf("assigning imap fail\n");
+        return -1;
+      }
+      free(MapPTR);
+    }
+     /*assign dmap 
+        depend on the FS size and how many DBlocks are left over
+        and will start on blck 70 onwards 
+    */ 
+    int total_entry = (size - (BLOCKSIZE * 70)) / 8;
+    if (total_entry < 1){
+      printf("Not enough space to use as FS\n");
+      return -1;
+    }
+    int block_amt = total_entry/64;
+    for(int i = 0; i < block_amt; i++){
+      MapPTR = (Bmap *) malloc(sizeof(Bmap) * 64);
+      for(int j = i * 64; j < 64 + (i * 64); j++ ){
+          myMap.obj_num = j;
+          myMap.alloc = 0;
+          *MapPTR = myMap;
+          MapPTR++;
+      }
+      if(dwrite(my_fd, i + 70, MapPTR)){
+        printf("assigning Dmap fail\n");
+        return -1;
+      }
+      free(MapPTR);
+    }
 
   if (close(my_fd) < 0 ) {
+    printf("Cannot close the file\n");
     return - 1;
   }
 
