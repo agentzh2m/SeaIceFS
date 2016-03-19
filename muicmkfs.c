@@ -15,48 +15,19 @@
 #include <unistd.h>
 #include "muicfs.h"
 
-#define DEBUG_ME printf("LINE number: %d\n", __LINE__ );
-#define PRINTPTR(pt) printf("Line num %d, PTR adr is %x \n", __LINE__, pt);
+
+
 
 int
 myformat(const char *filename, int size)
 {
   /* You need to fill this code in*/
-  int my_fd = open(filename, O_CREAT | O_RDWR, 0x00700);
+  int my_fd = creat(filename, 0777);
   if (my_fd < 0){
     printf("Formatting fail\n");
     return -1;
   }
-  //sblock info
-  /*
-    byte 0-27 fs_name (char 28)
-    byte 28-31 root_inode_num (int == 4 byte)
-    byte 32-35 size (int == 4 byte)
-    byte 36-39 total_indoes (int == 4 byte)
-
-  */
-  const char fs_name[28] = "SeaIceFS";
-  int root_inode_num = 2;
-  int total_inodes = 256; //can store maximum of 256 files
-  
-
-  //storing sblock info into fs image before init
-  char *my_buf;
-  my_buf =  (char *) malloc(64);
-  char * buf_ptr = my_buf;
-  for (int i = 0; i < sizeof(fs_name); i++){
-    *my_buf = fs_name[i];
-     my_buf++;
-  }
-  *my_buf = root_inode_num;
-  my_buf += sizeof(int);
-  *my_buf = size;
-  my_buf += sizeof(int);
-  *my_buf = total_inodes;
-  if ( (dwrite(my_fd, 0, my_buf)) == -1) {
-    printf("your disk image crashed\n");
-  }
-  free(buf_ptr);
+ 
   /*assign imap
         IMAP will be in block number 1 and 2 
         3 and 4
@@ -67,14 +38,19 @@ myformat(const char *filename, int size)
    Bmap * MapPTR;
    Bmap * initMPTR;
    Bmap myMap;
-    //assigning blck 1
-   printf("the size of Bmap is %d \n", sizeof(Bmap));
     for (int i = 0; i < 4; i++){
       MapPTR = (Bmap *) malloc(sizeof(Bmap) * 64);
       initMPTR = MapPTR;
       for (int j = i * 64; j < 64 + (i * 64); j++){
+        if(j == 2){
+          //root Inode assign
+          myMap.obj_num = j;
+          myMap.alloc = 1;
+        }else {
           myMap.obj_num = j;
           myMap.alloc = 0;
+        }
+          
           *MapPTR = myMap;
           MapPTR++;
       }
@@ -84,6 +60,43 @@ myformat(const char *filename, int size)
       }
       free(initMPTR);
     }
+
+
+    /* Assigning Inode and make root directory
+    start on blck 5 to blck 69 each blck have 4 Inode 
+    entries
+
+    */
+    Inode * InodePTR;
+    Inode * initIPTR;
+    Inode myInode;
+    printf("the size of Inode is %d \n", sizeof(Inode));
+
+    for(int i = 0; i < 64; i++){
+      InodePTR = (Inode *)malloc(sizeof(Inode) * 4);
+      initIPTR = InodePTR;
+      for(int j = i * 4; j < 4 + (i * 4); j++){
+        if(j==2){
+          //assigning root directory
+          myInode.inode_num = j;
+          myInode.block_pt[0] = 0;
+          myInode.total_blck = 1;
+          myInode.f_type = 1;
+        }else {
+          //assigning skeletion other Inodes
+          myInode.inode_num = j;
+        }
+        *InodePTR = myInode;
+        InodePTR++;
+        //myInode = NULL;
+      }
+      if ((dwrite(my_fd, i + 5, InodePTR)) == -1){
+        printf("assigning Inodes fail\n");
+        return -1;
+      }
+      free(initIPTR);
+    }
+
      /*assign dmap 
         depend on the FS size and how many DBlocks are left over
         and will start on blck 70 onwards 
@@ -98,8 +111,15 @@ myformat(const char *filename, int size)
       MapPTR = (Bmap *) malloc(sizeof(Bmap) * 64);
       initMPTR = MapPTR;
       for(int j = i * 64; j < 64 + (i * 64); j++ ){
+        if(j == 0){
+          //assign root dir to this block
+          myMap.obj_num = j;
+          myMap.alloc = 1;
+        }else {
           myMap.obj_num = j;
           myMap.alloc = 0;
+        }
+         
           *MapPTR = myMap;
           MapPTR++;
       }
@@ -109,6 +129,33 @@ myformat(const char *filename, int size)
       }
       free(initMPTR);
     }
+
+    //add root directory to dblock #0 starting after all the dblck
+    Directory * DirPTS = (Directory *) malloc(sizeof(Directory));
+    strcpy(DirPTS->f_name, ".");
+    DirPTS->inode_num = 2;
+    if(dwrite(my_fd, 71 + block_amt, DirPTS) == -1) {
+      printf("assigning root dir fail\n");
+      return -1;
+    }
+    free(DirPTS);
+
+  /*
+    assigning sblock
+    refer to sblck struct for more details
+  */
+  sblock * sblockPT = (sblock *) malloc(sizeof(sblock));
+  strcpy(sblockPT->fs_name, "SeaIce Cutey FS");
+  sblockPT->root_inode_num = 2;
+  sblockPT->total_inodes = 256;
+  sblockPT->fs_size = size;
+  sblockPT->dblck_start = 71 + block_amt;
+  if (dwrite(my_fd, 0, sblockPT) == -1) {
+    printf("assigning super block fail\n");
+    return -1;
+  }
+  free(sblockPT);
+  
 
   if (close(my_fd) < 0 ) {
     printf("Cannot close the file\n");

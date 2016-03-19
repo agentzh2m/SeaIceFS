@@ -59,15 +59,28 @@
  *
  */
 static int global_fd = -1;
-int disksize = 0;
+static int st_block = 0;
+static int my_root_num = -1;
 
 static void* xmp_mount(struct fuse_conn_info *conn) {
     global_fd = open(DISKFILE, O_RDWR);
     if (global_fd < 0){
-        printf("Mount fail Sea is not happy!! fd_code is %d\n", global_fd);
+        printf("Mount fail Sea is not happy!!\n");
         return -1;
     }
+    //read and retreive superblock 
+    sblock * s_holder = (sblock * ) malloc(sizeof(sblock));
+    if((dread(global_fd, 0, s_holder)) == -1) {
+        printf("Reading sblock fail maybe Sea don't like the name\n");
+    }
 
+    printf("-------Filesystem image information-------\n");
+    printf("FS Name: %s\n", s_holder->fs_name);
+    printf("FS size: %d\n", s_holder->fs_size);
+    printf("Data Block Start At Block number: %d \n", s_holder-> dblck_start);
+    st_block = s_holder-> dblck_start;
+    my_root_num = s_holder -> root_inode_num;
+    free(s_holder);
     return 1;
     
 
@@ -160,6 +173,54 @@ static int xmp_getattr(const char *path, struct stat *stbuf)
 
     */
     return 0;
+    Inode * inode_buf = (Inode *)malloc(sizeof(Inode) * 4); 
+    int datablock = -1;
+    dread(global_fd, 5, inode_buf);
+    for(int i = 0; i < 4; i++){
+        if(inode_buf->inode_num == my_root_num){
+            datablock = inode_buf->block_pt[0];
+            break;
+        }
+        i++;
+        inode_buf++;
+    }
+    //retreive root dir
+    Directory * dir_buf = (Directory *) malloc(sizeof(Directory) * 16);
+    if(dread(global_fd, datablock + st_block, dir_buf) == -1){
+        printf("Read datablock fail for directory\n");
+        return -1;
+    }
+    //split path into array
+    //count the total number of dir
+    int elts = 0;
+    for (int i = 0; i < strlen(path); i++){
+        if(path[0] == '/'){
+            elts++;
+        }
+    }
+    char dir_array[28][elts];
+    //store individual dir in an array
+    for (int i = 0; i < elts; i++){
+        for (int j = 0; j < 28; j++){
+            if(path[j+i] == '/'){
+                break;
+            }
+            dir_array[j][i] = path[j+i];
+        }
+    }
+
+    for (int i =0; i < elts; i++){
+        //check root for first elts
+        char pathName[28];
+        for (int ch = 0; ch < 28; ch++){
+            pathName[ch] = dir_array[ch][i];
+        }
+        for(int j =0; j < 16; j++ ){
+            if(strcmp(dir_buf->f_name, pathName) == 0){
+                filler(buf, pathName, NULL, 0);
+            }
+        }
+    }
 }
 
 /**
@@ -185,6 +246,10 @@ static int xmp_getattr(const char *path, struct stat *stbuf)
  */
 static int xmp_mkdir(const char *path, mode_t mode)
 {
+    //resolve directory path
+
+    //start traversing starting at the root directory
+
     return 0;
 }
 
@@ -214,6 +279,60 @@ static int xmp_mkdir(const char *path, mode_t mode)
 static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
                        off_t offset, struct fuse_file_info *fi)
 {
+    
+    //find root dir in the inodes
+    Inode * inode_buf = (Inode *)malloc(sizeof(Inode) * 4); 
+    int datablock = -1;
+    dread(global_fd, 5, inode_buf);
+    for(int i = 0; i < 4; i++){
+        if(inode_buf->inode_num == my_root_num){
+            datablock = inode_buf->block_pt[0];
+            break;
+        }
+        i++;
+        inode_buf++;
+    }
+    //retreive root dir
+    Directory * dir_buf = (Directory *) malloc(sizeof(Directory) * 16);
+    if(dread(global_fd, datablock + st_block, dir_buf) == -1){
+        printf("Read datablock fail for directory\n");
+        return -1;
+    }
+    //split path into array
+    //count the total number of dir
+    int elts = 0;
+    for (int i = 0; i < strlen(path); i++){
+        if(path[0] == '/'){
+            elts++;
+        }
+    }
+    char dir_array[28][elts];
+    //store individual dir in an array
+    for (int i = 0; i < elts; i++){
+        for (int j = 0; j < 28; j++){
+            if(path[j+i] == '/'){
+                break;
+            }
+            dir_array[j][i] = path[j+i];
+        }
+    }
+    struct stat st;
+
+    //check the validity of each dir entry
+    for (int i =0; i < elts; i++){
+        //check root for first elts
+        char pathName[28];
+        for (int ch = 0; ch < 28; ch++){
+            pathName[ch] = dir_array[ch][i];
+        }
+        for(int j =0; j < 16; j++ ){
+            if(strcmp(dir_buf->f_name, pathName) == 0){
+                filler(buf, pathName, NULL, 0);
+            }
+        }
+    }
+
+
     return 0;
 }
 
