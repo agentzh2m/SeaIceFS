@@ -3,6 +3,8 @@ the lovely stupid and wonderful filesystem
 how to use easy?
 	run start_fs to start in debug mode to execute in unix "./start_fs"
 where you can cd into /tmp/`whoami`/test to test the filesystem
+However you can do the following
+	"mkdir test" and "./muicfs -d test" in the same directory
 This fs is modeled after the VSFS system but with some twist 
 to make it easier to be implement
 you also need the FUSE Api
