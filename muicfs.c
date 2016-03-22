@@ -104,7 +104,7 @@ static void* xmp_mount(struct fuse_conn_info *conn) {
 static void xmp_unmount (void *private_data) {
     if (close(global_fd) < 0) {
         printf("Mount fail because Sea is angry\n");
-        return -1;
+        //return -1;
     }
 }
 
@@ -216,9 +216,9 @@ static int xmp_getattr(const char *path, struct stat *stbuf)
             pathName[ch] = dir_array[ch][i];
         }
         for(int j =0; j < 16; j++ ){
-            if(strcmp(dir_buf->f_name, pathName) == 0){
-                filler(buf, pathName, NULL, 0);
-            }
+            // if(strcmp(dir_buf->f_name, pathName) == 0){
+            //     filler(buf, pathName, NULL, 0);
+            // }
         }
     }
 }
