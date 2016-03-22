@@ -27,6 +27,7 @@
 #include <sys/statvfs.h>
 #ifdef HAVE_SETXATTR
 #include <sys/xattr.h>
+#include <sys/stat.h>
 #endif
 
 #include "muicfs.h"
@@ -89,6 +90,22 @@ static void* xmp_mount(struct fuse_conn_info *conn) {
         no need to initialize but will accomodate blck 5 to 69   
     */
 
+}
+
+/* return Inode number if the file exist in the data
+    blck (if it is a directory) if not return -1  */
+static int* search_dir(char* filename, int data_blck){
+    Directory* dir_buf = (Directory*) malloc(sizeof(Directory) * 16);
+    Directory* init_buf = dir_buf;
+    dread(global_fd, data_blck + st_block, dir_buf);
+    for (int i = 0; i < 16; i++){
+        if(!strcmp(filename, dir_buf->f_name)){
+            return dir_buf->inode_num;
+        }
+        dir_buf++;
+    }
+    free(init_buf);
+    return -1;
 }
 
 /*
@@ -159,6 +176,7 @@ static int xmp_getattr(const char *path, struct stat *stbuf)
     stbuf->st_atime = time(NULL);
     stbuf->st_mtime = time(NULL);
     stbuf->st_ctime = time(NULL);
+    stbuf-> st_blksize = BLOCKSIZE;
 
     /* you have to implement the following fields correctly
 
@@ -172,54 +190,53 @@ static int xmp_getattr(const char *path, struct stat *stbuf)
     stbuf->st_blksize =  // block size of you file system
 
     */
-    return 0;
-    Inode * inode_buf = (Inode *)malloc(sizeof(Inode) * 4); 
-    int datablock = -1;
-    dread(global_fd, 5, inode_buf);
-    for(int i = 0; i < 4; i++){
-        if(inode_buf->inode_num == my_root_num){
-            datablock = inode_buf->block_pt[0];
-            break;
+    char *tok_pt;
+    int inum;
+    int datanum = 0;
+
+    int cur_size = -1;
+    int cur_blck = -1;
+    int cur_mode = -1;
+
+    for(tok_pt = strtok(path, "/"); ;tok_pt=strtok(NULL, "/")){
+        if(!cur_mode){
+            printf("This is a file not a directory there is no more path\n");
         }
-        i++;
-        inode_buf++;
-    }
-    //retreive root dir
-    Directory * dir_buf = (Directory *) malloc(sizeof(Directory) * 16);
-    if(dread(global_fd, datablock + st_block, dir_buf) == -1){
-        printf("Read datablock fail for directory\n");
-        return -1;
-    }
-    //split path into array
-    //count the total number of dir
-    int elts = 0;
-    for (int i = 0; i < strlen(path); i++){
-        if(path[0] == '/'){
-            elts++;
+        //start searching in root (root is kept in data blck 0)
+        if((inum = search_dir(tok_pt, datanum)) < 0){
+            return -1;
+        }else{
+            //search inode for new dir blck
+            Inode *ibuf = (Inode*) malloc(sizeof(Inode)*4);
+            Inode *initbuf = ibuf;
+            if(dread(global_fd, (inum/4) + INODE_OFFSET, ibuf) < 0){
+                printf("Read inode fail at %d\n",__LINE__ );
+                return -1;
+            } 
+            //shift to the corresponding blck using mod
+            ibuf+= inum%4;
+            datanum = ibuf->block_pt[0];
+            cur_size = ibuf->f_size;
+            cur_blck = ibuf->total_blck;
+            cur_mode = ibuf->f_type;
+            free(initbuf);
         }
+        
     }
-    char dir_array[28][elts];
-    //store individual dir in an array
-    for (int i = 0; i < elts; i++){
-        for (int j = 0; j < 28; j++){
-            if(path[j+i] == '/'){
-                break;
-            }
-            dir_array[j][i] = path[j+i];
-        }
+    stbuf->st_size = cur_size;
+    stbuf->st_blocks = cur_blck;
+    if (cur_mode) {
+        //1 is directory therefore true then
+        stbuf->st_mode = (0777 | 040000); //cannot use IS_IFDIR compilation fail undeclared
+    }else{
+        stbuf->st_mode = (0777 | 100000); //cannot use IS_IFREG compilation fail undeclared
     }
 
-    for (int i =0; i < elts; i++){
-        //check root for first elts
-        char pathName[28];
-        for (int ch = 0; ch < 28; ch++){
-            pathName[ch] = dir_array[ch][i];
-        }
-        for(int j =0; j < 16; j++ ){
-            // if(strcmp(dir_buf->f_name, pathName) == 0){
-            //     filler(buf, pathName, NULL, 0);
-            // }
-        }
+    if (cur_size < 0 || cur_blck < 0 || cur_mode < 0){
+        printf("Incorrect stat assignment cur_size: %d, cur_blck: %d, cur_mode: %d\n", cur_size, cur_blck, cur_mode );
+        return -1;
+    }else{
+        return 0;
     }
 }
 
@@ -279,59 +296,55 @@ static int xmp_mkdir(const char *path, mode_t mode)
 static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
                        off_t offset, struct fuse_file_info *fi)
 {
-    
+    DEBUG_ME;
     //find root dir in the inodes
-    Inode * inode_buf = (Inode *)malloc(sizeof(Inode) * 4); 
-    int datablock = -1;
-    dread(global_fd, 5, inode_buf);
-    for(int i = 0; i < 4; i++){
-        if(inode_buf->inode_num == my_root_num){
-            datablock = inode_buf->block_pt[0];
-            break;
+    char *tok_pt;
+    int inum;
+    int datanum = 0;
+    int valid_dir_data = -1;
+
+    Directory *dir_buf = (Directory *)malloc(sizeof(Directory) * 16);
+
+     for(tok_pt = strtok(path, "/"); ;tok_pt=strtok(NULL, "/")){
+        //start searching in root (root is kept in data blck 0)
+        if((inum = search_dir(tok_pt, datanum)) < 0){
+            return -1;
+        }else{
+            DEBUG_ME;
+            //search inode for new dir blck
+            Inode *ibuf = (Inode*) malloc(sizeof(Inode)*4);
+            Inode *initbuf = ibuf;
+            if(dread(global_fd, (inum/4) + INODE_OFFSET, ibuf) < 0){
+                printf("Read inode fail at %d\n",__LINE__ );
+                return -1;
+            } 
+            //shift to the corresponding blck using mod
+            ibuf+= inum%4;
+            datanum = ibuf->block_pt[0];
+            if (ibuf->f_type){
+                valid_dir_data = datanum;
+            }
+            free(initbuf);
         }
-        i++;
-        inode_buf++;
+       
     }
-    //retreive root dir
-    Directory * dir_buf = (Directory *) malloc(sizeof(Directory) * 16);
-    if(dread(global_fd, datablock + st_block, dir_buf) == -1){
-        printf("Read datablock fail for directory\n");
+    DEBUG_ME;
+    if (valid_dir_data < 0){
+        printf("Not a valid directory\n");
         return -1;
     }
-    //split path into array
-    //count the total number of dir
-    int elts = 0;
-    for (int i = 0; i < strlen(path); i++){
-        if(path[0] == '/'){
-            elts++;
-        }
-    }
-    char dir_array[28][elts];
-    //store individual dir in an array
-    for (int i = 0; i < elts; i++){
-        for (int j = 0; j < 28; j++){
-            if(path[j+i] == '/'){
-                break;
-            }
-            dir_array[j][i] = path[j+i];
-        }
-    }
-    struct stat st;
 
-    //check the validity of each dir entry
-    for (int i =0; i < elts; i++){
-        //check root for first elts
-        char pathName[28];
-        for (int ch = 0; ch < 28; ch++){
-            pathName[ch] = dir_array[ch][i];
-        }
-        for(int j =0; j < 16; j++ ){
-            if(strcmp(dir_buf->f_name, pathName) == 0){
-                filler(buf, pathName, NULL, 0);
-            }
-        }
+    if(dread(global_fd, datanum + st_block, dir_buf) < 0){
+        printf("Read fail at %d\n",__LINE__ );
+        return -1;
     }
-
+    Directory *init_dirbuf = dir_buf;
+    for (int i = 0; i < 16; i++){
+        if(strlen(dir_buf->f_name) > 0){
+            filler(buf, dir_buf->f_name, NULL, 0);
+        } 
+    }
+    free(init_dirbuf);
 
     return 0;
 }

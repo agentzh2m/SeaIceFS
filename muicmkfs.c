@@ -83,14 +83,13 @@ myformat(const char *filename, int size)
           myInode.total_blck = 1;
           myInode.f_type = 1;
         }else {
-          //assigning skeletion other Inodes
+          //assigning skeleton for other Inodes
           myInode.inode_num = j;
         }
         *InodePTR = myInode;
         InodePTR++;
-        //myInode = NULL;
       }
-      if ((dwrite(my_fd, i + 5, InodePTR)) == -1){
+      if ((dwrite(my_fd, i + INODE_OFFSET, InodePTR)) == -1){
         printf("assigning Inodes fail\n");
         return -1;
       }

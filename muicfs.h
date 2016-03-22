@@ -10,6 +10,7 @@
    to replace this with an absolute path. */
 #define DISKFILE "disk.txt"
 
+#define INODE_OFFSET 5
 /* You must use the following two calls to read from your "disk" */
 
 /* Read a block from disk */
