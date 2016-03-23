@@ -16,8 +16,6 @@
 #include "muicfs.h"
 
 
-
-
 int
 myformat(const char *filename, int size)
 {
@@ -37,24 +35,22 @@ myformat(const char *filename, int size)
     */ 
    Bmap * MapPTR;
    Bmap * initMPTR;
-   Bmap myMap;
     for (int i = 0; i < 4; i++){
       MapPTR = (Bmap *) malloc(sizeof(Bmap) * 64);
       initMPTR = MapPTR;
       for (int j = i * 64; j < 64 + (i * 64); j++){
         if(j == 2){
           //root Inode assign
-          myMap.obj_num = j;
-          myMap.alloc = 1;
+          MapPTR->obj_num = j;
+          MapPTR->alloc = 1;
         }else {
-          myMap.obj_num = j;
-          myMap.alloc = 0;
+          MapPTR->obj_num = j;
+          MapPTR->alloc = 0;
         }
           
-          *MapPTR = myMap;
           MapPTR++;
       }
-      if ((dwrite(my_fd, i+1, MapPTR)) == -1){
+      if ((dwrite(my_fd, i+IMAP_OFFSET, initMPTR)) == -1){
         printf("assigning imap fail\n");
         return -1;
       }
@@ -69,27 +65,24 @@ myformat(const char *filename, int size)
     */
     Inode * InodePTR;
     Inode * initIPTR;
-    Inode myInode;
-    printf("the size of Inode is %d \n", sizeof(Inode));
-
     for(int i = 0; i < 64; i++){
       InodePTR = (Inode *)malloc(sizeof(Inode) * 4);
       initIPTR = InodePTR;
       for(int j = i * 4; j < 4 + (i * 4); j++){
         if(j==2){
           //assigning root directory
-          myInode.inode_num = j;
-          myInode.block_pt[0] = 0;
-          myInode.total_blck = 1;
-          myInode.f_type = 1;
+          InodePTR->inode_num = j;
+          InodePTR->block_pt[0] = 0;
+          InodePTR->total_blck = 1;
+          InodePTR->f_type = 1;
+          InodePTR->f_size = 512;
         }else {
           //assigning skeleton for other Inodes
-          myInode.inode_num = j;
+          InodePTR->inode_num = j;
         }
-        *InodePTR = myInode;
         InodePTR++;
       }
-      if ((dwrite(my_fd, i + INODE_OFFSET, InodePTR)) == -1){
+      if ((dwrite(my_fd, i + INODE_OFFSET, initIPTR)) == -1){
         printf("assigning Inodes fail\n");
         return -1;
       }
@@ -112,17 +105,15 @@ myformat(const char *filename, int size)
       for(int j = i * 64; j < 64 + (i * 64); j++ ){
         if(j == 0){
           //assign root dir to this block
-          myMap.obj_num = j;
-          myMap.alloc = 1;
+          MapPTR->obj_num = j;
+          MapPTR->alloc = 1;
         }else {
-          myMap.obj_num = j;
-          myMap.alloc = 0;
+          MapPTR->obj_num = j;
+          MapPTR->alloc = 0;
         }
-         
-          *MapPTR = myMap;
           MapPTR++;
       }
-      if((dwrite(my_fd, i + 70, MapPTR)) == -1){
+      if((dwrite(my_fd, i + DMAP_OFFSET, initMPTR)) == -1){
         printf("assigning Dmap fail\n");
         return -1;
       }
