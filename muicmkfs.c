@@ -32,8 +32,8 @@ myformat(const char *filename, int size)
         don't use bitmap structure anymore inode num start @
         imap offset (read and then use ptr to find the thingy
     */ 
-   char * MapPTR = (char*)malloc(sizeof(char) * 256);
-   char * initMPTR = MapPTR;
+   char *MapPTR = (char*)malloc(sizeof(char) * 256);
+   char *initMPTR = MapPTR;
 
    for(int i = 0; i < 256; i++){
 	   if(i == 2){
@@ -82,28 +82,37 @@ myformat(const char *filename, int size)
 
      /*assign dmap 
         depend on the FS size and how many DBlocks are left over
-        and will start on blck 70 onwards 
+        and will start on blck 66 onwards
     */ 
     int total_entry = (size - (BLOCKSIZE * 70)) ;
     if (total_entry < 1){
       printf("Not enough space to use as FS\n");
       return -1;
     }
-    int block_amt = total_entry/512;
-    for(int i = 0; i < block_amt; i++){
-     char *MapPTR = (char*)malloc(sizeof(char) * 512);
-     char *initMPTR;
-     for (int j = 0; j < 512; j++) {
-    	*MapPTR = 0;
-    	MapPTR++;
-     }
-     if((dwrite(my_fd, i + DMAP_OFFSET, initMPTR)) == -1){
-    	 printf("assigning Dmap fail\n");
-    	 return -1;
-     }
-     	 free(initMPTR);
-     }
+    int block_amt = total_entry/BLOCKSIZE;
+    int total_blck = block_amt/ BLOCKSIZE;
+    MapPTR = (char*)malloc(sizeof(char) * 512);
+    initMPTR = MapPTR;
+    if(total_blck < 1){
+    	for(int i = 0; i < block_amt; i++){
+    		*MapPTR = 0;
+    		MapPTR++;
+    	}
+    	if(dwrite(my_fd, DMAP_OFFSET, initMPTR) < 0){
+    		printf("assign dmap fail at DMAP 0 \n");
+    	}
+    }else{
+    	for(int i = 0; i < total_blck; i++){
+    		for(int j = 0; j < BLOCKSIZE; j++ ){
+    			*MapPTR = 0;
+    			MapPTR++;
+    		}
+    		if(dwrite(my_fd, DMAP_OFFSET + i, initMPTR) < 0){
+    			printf("assign dmap fail at DMAP 0");
+    		}
+    	}
 
+    }
     //add root directory to dblock #0 starting after all the dblck
     Directory * DirPTS = (Directory *) malloc(sizeof(Directory));
     char *Map = (char *)malloc(sizeof(char) * 512);
@@ -130,11 +139,12 @@ myformat(const char *filename, int size)
     refer to sblck struct for more details
   */
   sblock * sblockPT = (sblock *) malloc(sizeof(sblock));
-  strcpy(sblockPT->fs_name, "SeaIce Cutey FS");
+  strcpy(sblockPT->fs_name, "SeaIce Lovely FS");
   sblockPT->root_inode_num = 2;
   sblockPT->total_inodes = 256;
   sblockPT->fs_size = size;
-  sblockPT->dblck_start = 71 + block_amt;
+  sblockPT->dblck_start = DMAP_OFFSET + block_amt;
+  sblockPT->total_dblck = block_amt;
   if (dwrite(my_fd, 0, sblockPT) == -1) {
     printf("assigning super block fail\n");
     return -1;
