@@ -70,6 +70,9 @@ myformat(const char *filename, int size)
         }else {
           //assigning skeleton for other Inodes
           InodePTR->inode_num = j;
+          InodePTR->total_blck = -1;
+          InodePTR->f_type = -1;
+          InodePTR->f_size = 512;
         }
         InodePTR++;
       }
@@ -84,18 +87,23 @@ myformat(const char *filename, int size)
         depend on the FS size and how many DBlocks are left over
         and will start on blck 66 onwards
     */ 
-    int total_entry = (size - (BLOCKSIZE * 70)) ;
+    int total_entry = (size - (BLOCKSIZE * 66)) ;
     if (total_entry < 1){
       printf("Not enough space to use as FS\n");
       return -1;
     }
-    int block_amt = total_entry/BLOCKSIZE;
-    int total_blck = block_amt/ BLOCKSIZE;
+    int block_amt = total_entry/BLOCKSIZE ;
+    int total_blck = (block_amt/ BLOCKSIZE) + 1;
     MapPTR = (char*)malloc(sizeof(char) * 512);
     initMPTR = MapPTR;
     if(total_blck < 1){
     	for(int i = 0; i < block_amt; i++){
-    		*MapPTR = 0;
+    		if(i == 0){
+    			//assign root dir
+    			*MapPTR = 1;
+    		}else {
+    			*MapPTR = 0;
+    		}
     		MapPTR++;
     	}
     	if(dwrite(my_fd, DMAP_OFFSET, initMPTR) < 0){
@@ -114,25 +122,18 @@ myformat(const char *filename, int size)
 
     }
     //add root directory to dblock #0 starting after all the dblck
-    Directory * DirPTS = (Directory *) malloc(sizeof(Directory));
-    char *Map = (char *)malloc(sizeof(char) * 512);
-    if(dread(my_fd, DMAP_OFFSET, Map)){
-    	printf("Read fail \n");
-    	return -1;
-    }
-    *Map = 1; //make dmap zero alloc cated
-    if(dwrite(my_fd, DMAP_OFFSET, Map)){
-    	printf("Write fail \n");
-    	return -1;
-    }
-    free(Map);
+    Directory * DirPTS = (Directory *) malloc(sizeof(Directory) * 16);
+    Directory *initDir = DirPTS;
     strcpy(DirPTS->f_name, ".");
     DirPTS->inode_num = 2;
-    if(dwrite(my_fd, 71 + block_amt, DirPTS) == -1) {
+    DirPTS++;
+    strcpy(DirPTS->f_name, "..");
+    DirPTS->inode_num = 2;
+    if(dwrite(my_fd, 66 + total_blck, initDir) == -1) {
       printf("assigning root dir fail\n");
       return -1;
     }
-    free(DirPTS);
+    free(initDir);
 
   /*
     assigning sblock
@@ -143,7 +144,7 @@ myformat(const char *filename, int size)
   sblockPT->root_inode_num = 2;
   sblockPT->total_inodes = 256;
   sblockPT->fs_size = size;
-  sblockPT->dblck_start = DMAP_OFFSET + block_amt;
+  sblockPT->dblck_start = DMAP_OFFSET + total_blck;
   sblockPT->total_dblck = block_amt;
   if (dwrite(my_fd, 0, sblockPT) == -1) {
     printf("assigning super block fail\n");
