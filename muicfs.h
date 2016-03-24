@@ -10,8 +10,8 @@
    to replace this with an absolute path. */
 #define DISKFILE "disk.txt"
 
-#define INODE_OFFSET 5
-#define DMAP_OFFSET 70
+#define INODE_OFFSET 2
+#define DMAP_OFFSET 66
 #define IMAP_OFFSET 1
 /* You must use the following two calls to read from your "disk" */
 
@@ -23,6 +23,8 @@ int dwrite(int fd, int blocknum, char *buf);
 
 #define DEBUG_ME printf("LINE number: %d\n", __LINE__ );
 #define PRINTPTR(pt) printf("Line num %d, PTR adr is %x \n", __LINE__, pt);
+#define RFAIL printf("Read fail at line %d \n", __LINE__);
+#define WFAIL printf("Write fail at line %d \n", __LINE__);
 
 typedef struct InodeStruct {
 	int inode_num; //the number to identify this Inode
@@ -34,13 +36,7 @@ typedef struct InodeStruct {
 	//Inode will 128 bytes
 } Inode;
 
-typedef struct BitMapStruct 
-{
-	int obj_num;
-	char alloc; //1 is alloc, 0 is free
-	//Bitmap will be 8 byte each
-	
-} Bmap;
+/*Remove the use of bitmap struct now each bitmap is 1 byte each */
 
 typedef struct DirStruct
 {
@@ -57,5 +53,6 @@ typedef struct sblckStruct
   int total_inodes;
   int fs_size;
   int dblck_start;
+  int total_dblck;
   
 }sblock;
