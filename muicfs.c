@@ -344,24 +344,23 @@ static int xmp_getattr(const char *path, struct stat *stbuf)
     	if(dread(global_fd, INODE_OFFSET, root_data) < 0){
     		printf("Read fail at Line %d \n",__LINE__);
     	}
-
     	root_data+=2;
     	stbuf->st_size = root_data->f_size;
     	stbuf->st_blocks = root_data->total_blck;
     	stbuf->st_blksize = 512;
-    	stbuf->st_mode = 0777 | S_IFDIR;
+    	if(root_data->f_type){
+    		stbuf->st_mode = 0777 | S_IFDIR;
+    	}
     	datanum = root_data->block_pt[0];
-    	 free(initptr);
+    	free(initptr);
     	printf("finish fetching from root dir \n");
     	return 0;
 
     }else { //if dir is not root or some other dir
-    	DEBUG_ME;
     	for(tok_pt = strtok("path", "/"); tok_pt!=NULL; tok_pt=(NULL, "/")){
     		printf("going through file %s of the path: %s \n", tok_pt, path);
     		Directory *my_dir = (Directory*)malloc(sizeof(Directory) * 16);
     		Directory *init_dir = my_dir;
-    		printf("Reading at blck %d \n", st_block + datanum);
     		if(dread(global_fd, st_block + datanum, my_dir) < 0){
     			printf("Read fail at datablck %d \n", datanum);
     			return -1;
@@ -369,6 +368,7 @@ static int xmp_getattr(const char *path, struct stat *stbuf)
     		//search the directory
     		if((inum = search_dir(path, datanum)) < 0){
     			printf("Unable to find the file in dir\n");
+    			free(init_dir);
     			return -2;
     		}
 
@@ -451,18 +451,20 @@ static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 		printf("Not a directory!!!");
 		return -1;
 	}
-	Directory *dir_buf = (Directory *)malloc(sizeof(Directory) * DIR_AMT);
+	Directory *dir_buf = (Directory*)malloc(sizeof(Directory) * DIR_AMT);
 	Directory *init_d = dir_buf;
 	if(dread(global_fd, datano + DATA_OFFSET, init_d) < 0){
 		RFAIL;
 		return -1;
 	}
-	for(int i = 0; i < 16; i++){
+	for(int i = 0; i < DIR_AMT; i++){
 		if(strlen(dir_buf->f_name) > 0){
-			printf("Adding %s file to ls\n");
+			printf("Adding %s file to ls\n", dir_buf->f_name);
 			filler(buf, dir_buf->f_name, NULL, 0);
+			dir_buf++;
 		}
 	}
+	free(init_d);
 	return 0;
 }
 
@@ -487,7 +489,7 @@ static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
  */
 static int xmp_create(const char *path, mode_t mode, dev_t rdev)
 {
-	int* datano = traverse_dir_w(path);
+	int* tuple = traverse_dir_w(path);
 	Directory *dir_buf = (Directory*)malloc(sizeof(Directory)*DIR_AMT);
 	Directory *init_dbuf = dir_buf;
 	char* last_path;
@@ -496,13 +498,14 @@ static int xmp_create(const char *path, mode_t mode, dev_t rdev)
 	for(char* path_pt = strtok(path,"/"); path_pt!=NULL; path_pt = strtok(NULL,"/")){
 		last_path = path_pt;
 	}
-	if(dread(global_fd, datano[1], init_dbuf) < 0){
+	if(dread(global_fd, tuple[1] + DATA_OFFSET, init_dbuf) < 0){
 		RFAIL;
 		return -1;
 	}
 	//assign file to free dir
 	for(int i = 0; i < DIR_AMT; i++){
-		if(strlen(dir_buf->f_name) > 0){
+		printf("finding free dir right now at %s \n", dir_buf->f_name);
+		if(strlen(dir_buf->f_name) < 1){
 			strcpy(dir_buf->f_name, last_path);
 			dir_buf->inode_num = free_inum;
 		}
