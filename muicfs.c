@@ -100,10 +100,10 @@ static void* xmp_mount(struct fuse_conn_info *conn) {
 static int search_dir(char* filename, int data_blck){
     Directory* dir_buf = (Directory*) malloc(sizeof(Directory) * DIR_AMT);
     Directory* init_buf = dir_buf;
-    if(dread(global_fd, data_blck + st_block, dir_buf) < 0){
+    if(dread(global_fd, data_blck + DATA_OFFSET, dir_buf) < 0){
     	RFAIL;
     }
-    for (int i = 0; i < 16; i++){
+    for (int i = 0; i < DIR_AMT; i++){
     	printf("Searching through dir of %s, chk %s right now \n", filename, dir_buf->f_name);
         if(!strcmp(filename, dir_buf->f_name)){
         	free(init_buf);
@@ -167,7 +167,7 @@ static int* traverse_dir_w(char* path){
 	Inode *ibuf = (Inode *)malloc(sizeof(Inode) * INODE_AMT);
 	Inode *init_ibuf = ibuf;
 
-	if(strlen(path) < 2){
+	if(strlen(path) < 2 || sl_count < 2){
 		tuple[0] = 2;
 		tuple[1] = 0;
 		return tuple;
@@ -180,6 +180,9 @@ static int* traverse_dir_w(char* path){
 		}
 		//start traversing to the file before the last
 		for(path_pt = strtok(path, "/"); path_pt!=NULL; path_pt = strtok(NULL, "/")){
+			if(tr_count >= sl_count){
+				break;
+			}
 			//find inum in dir
 			ino = search_dir(path_pt, datano);
 			if(ino < 0){
@@ -197,9 +200,8 @@ static int* traverse_dir_w(char* path){
 				printf("This is not a directory ");
 				return -1;
 			}
-			if(tr_count >= sl_count){
-				break;
-			}
+
+			tr_count++;
 		}
 		tuple[0] = ino;
 		tuple[1] = datano;
@@ -337,7 +339,7 @@ static int xmp_getattr(const char *path, struct stat *stbuf)
     int datanum = 0; //root at data blck zero
 
     //if root dir
-    if(strlen(path) < 2){
+    if(strlen(path) < 2 ){
     	Inode *root_data = (Inode*) malloc(sizeof(Inode) * INODE_AMT);
     	Inode *initptr = root_data;
 
@@ -357,16 +359,16 @@ static int xmp_getattr(const char *path, struct stat *stbuf)
     	return 0;
 
     }else { //if dir is not root or some other dir
-    	for(tok_pt = strtok("path", "/"); tok_pt!=NULL; tok_pt=(NULL, "/")){
+    	for(tok_pt = strtok(path, "/"); tok_pt!=NULL; tok_pt=(NULL, "/")){
     		printf("going through file %s of the path: %s \n", tok_pt, path);
-    		Directory *my_dir = (Directory*)malloc(sizeof(Directory) * 16);
+    		Directory *my_dir = (Directory*)malloc(sizeof(Directory) * DIR_AMT);
     		Directory *init_dir = my_dir;
-    		if(dread(global_fd, st_block + datanum, my_dir) < 0){
+    		if(dread(global_fd, DATA_OFFSET + datanum, my_dir) < 0){
     			printf("Read fail at datablck %d \n", datanum);
     			return -1;
     		}
     		//search the directory
-    		if((inum = search_dir(path, datanum)) < 0){
+    		if((inum = search_dir(tok_pt, datanum)) < 0){
     			printf("Unable to find the file in dir\n");
     			free(init_dir);
     			return -2;
@@ -489,7 +491,10 @@ static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
  */
 static int xmp_create(const char *path, mode_t mode, dev_t rdev)
 {
+	printf("Start creating \n");
 	int* tuple = traverse_dir_w(path);
+	int path_data = tuple[1];
+	int path_inode = tuple[0];
 	Directory *dir_buf = (Directory*)malloc(sizeof(Directory)*DIR_AMT);
 	Directory *init_dbuf = dir_buf;
 	char* last_path;
@@ -498,18 +503,26 @@ static int xmp_create(const char *path, mode_t mode, dev_t rdev)
 	for(char* path_pt = strtok(path,"/"); path_pt!=NULL; path_pt = strtok(NULL,"/")){
 		last_path = path_pt;
 	}
-	if(dread(global_fd, tuple[1] + DATA_OFFSET, init_dbuf) < 0){
+	printf("Start read at blck %d \n", path_data );
+	if(dread(global_fd, path_data + DATA_OFFSET, init_dbuf) < 0){
 		RFAIL;
 		return -1;
 	}
 	//assign file to free dir
+	printf("Print last path: %s \n", last_path);
 	for(int i = 0; i < DIR_AMT; i++){
 		printf("finding free dir right now at %s \n", dir_buf->f_name);
 		if(strlen(dir_buf->f_name) < 1){
+			printf("Assigning %s at dir", last_path);
 			strcpy(dir_buf->f_name, last_path);
 			dir_buf->inode_num = free_inum;
+			break;
 		}
 		dir_buf++;
+	}
+	if(dwrite(global_fd, path_data + DATA_OFFSET, init_dbuf) < 0){
+		RFAIL;
+		return -1;
 	}
 	//configure inode according to the new inum
 	Inode *ibuf = (Inode*)malloc(sizeof(Inode)*INODE_AMT);
@@ -522,6 +535,10 @@ static int xmp_create(const char *path, mode_t mode, dev_t rdev)
 	ibuf->f_size = 0;
 	ibuf->f_type = 0;
 	ibuf->total_blck = 0;
+	if(dwrite(global_fd, free_inum/4 + INODE_OFFSET, init_ibuf) < 0){
+		RFAIL;
+		return -1;
+	}
 	return 0;
 
 }
