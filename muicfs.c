@@ -61,8 +61,8 @@
  *
  */
 static int global_fd = -1;
-static int st_block = 0;
 static int my_root_num = -1;
+static int st_block = 0;
 static int total_blck = -1;
 
 static void* xmp_mount(struct fuse_conn_info *conn) {
@@ -418,7 +418,69 @@ static int xmp_getattr(const char *path, struct stat *stbuf)
  */
 static int xmp_mkdir(const char *path, mode_t mode)
 {
-   return 0;
+	int tup[2] = traverse_dir_w(path);
+	int dir_inum = tup[0];
+	int dir_dnum = tup[1];
+
+	//pull the corresponding dir data blck
+	Directory *dir_buf = (Directory*)malloc(sizeof(Directory) * DIR_AMT);
+	Directory *init_dbuf = dir_buf;
+
+	char* last_path;
+	for(char* ch=strtok(path,"/"); ch!=NULL; ch=strtok("NULL", "/")){
+		last_path = ch;
+	}
+
+	if(dread(global_fd, dir_dnum, init_dbuf) < 0){
+		RFAIL;
+		return -1;
+	}
+	//finding free inode and dblck for dir
+	int free_inum = assign_bitmap(IMAP_OFFSET);
+	int free_dnum = assign_bitmap(DMAP_OFFSET);
+	for(int i = 0; i < DIR_AMT; i++){
+		//finding free blck
+		if(strlen(dir_buf->f_name) > 0){
+			strcpy(dir_buf->f_name, last_path);
+			dir_buf->inode_num = free_inum;
+			break;
+		}
+	}
+	free(init_dbuf);
+	//make a data block a into a Directory and insert inum of previous and current
+	init_dbuf = (Directory*)malloc(sizeof(Directory) * DIR_AMT);
+	dir_buf = init_dbuf;
+
+	strcpy(dir_buf->f_name, ".");
+	dir_buf->inode_num = free_inum;
+	dir_buf++;
+	strcpy(dir_buf->f_name, "..");
+	dir_buf = dir_inum;
+
+	if(dwrite(global_fd, DATA_OFFSET + free_dnum, dir_buf) < 0 ){
+		RFAIL;
+		return -1;
+	}
+	//configure inode according to dir
+	Inode *ibuf = (Inode*)malloc(sizeof(Inode) * INODE_AMT);
+	Inode *init_ibuf = ibuf;
+
+	if(dread(global_fd, INODE_OFFSET + free_inum/4, ibuf) < 0){
+		RFAIL;
+		return -1;
+	}
+	ibuf+=free_inum%4;
+	ibuf->f_size = 512;
+	ibuf->total_blck = 1;
+	ibuf->block_pt[0] = free_dnum;
+	ibuf->f_type = 1;
+
+	if(dwrite(global_fd, INODE_OFFSET + free_inum/4, init_ibuf) < 0){
+		WFAIL;
+		return -1;
+	}
+
+	return 0;
 }
 
 /** Read directory
@@ -524,6 +586,7 @@ static int xmp_create(const char *path, mode_t mode, dev_t rdev)
 		RFAIL;
 		return -1;
 	}
+	free(init_dbuf);
 	//configure inode according to the new inum
 	Inode *ibuf = (Inode*)malloc(sizeof(Inode)*INODE_AMT);
 	Inode *init_ibuf = ibuf;
@@ -539,6 +602,7 @@ static int xmp_create(const char *path, mode_t mode, dev_t rdev)
 		RFAIL;
 		return -1;
 	}
+	free(init_ibuf);
 	return 0;
 
 }
