@@ -32,7 +32,7 @@ myformat(const char *filename, int size)
         don't use bitmap structure anymore inode num start @
         imap offset (read and then use ptr to find the thingy
     */ 
-   char *MapPTR = (char*)malloc(sizeof(char) * 256);
+   char *MapPTR = (char*)malloc(sizeof(char) * BLOCKSIZE);
    char *initMPTR = MapPTR;
 
    for(int i = 0; i < 256; i++){
@@ -54,25 +54,25 @@ myformat(const char *filename, int size)
     entries
 
     */
-    Inode * InodePTR;
-    Inode * initIPTR;
-    for(int i = 0; i < 64; i++){
-      InodePTR = (Inode *)malloc(sizeof(Inode) * 4);
+    Inode *InodePTR;
+    Inode *initIPTR;
+    for(int i = 0; i < TOTAL_IBLCK ; i++){
+      InodePTR = (Inode *)malloc(sizeof(Inode) * INODE_AMT);
       initIPTR = InodePTR;
-      for(int j = i * 4; j < 4 + (i * 4); j++){
+      for(int j = i * INODE_AMT; j < INODE_AMT + (i * INODE_AMT); j++){
         if(j==2){
           //assigning root directory
           InodePTR->inode_num = j;
           InodePTR->block_pt[0] = 0;
           InodePTR->total_blck = 1;
           InodePTR->f_type = 1;
-          InodePTR->f_size = 512;
+          InodePTR->f_size = BLOCKSIZE;
         }else {
           //assigning skeleton for other Inodes
           InodePTR->inode_num = j;
           InodePTR->total_blck = -1;
           InodePTR->f_type = -1;
-          InodePTR->f_size = 512;
+          InodePTR->f_size = BLOCKSIZE;
         }
         InodePTR++;
       }
@@ -85,16 +85,17 @@ myformat(const char *filename, int size)
 
      /*assign dmap 
         depend on the FS size and how many DBlocks are left over
-        and will start on blck 66 onwards
+        and will start on blck 66 onwards or according to my
+        calculation
     */ 
-    int total_entry = (size - (BLOCKSIZE * 66)) ;
+    int total_entry = (size - (BLOCKSIZE * DMAP_OFFSET)) ;
     if (total_entry < 1){
       printf("Not enough space to use as FS\n");
       return -1;
     }
     int block_amt = total_entry/BLOCKSIZE ;
     int total_blck = (block_amt/ BLOCKSIZE) + 1;
-    MapPTR = (char*)malloc(sizeof(char) * 512);
+    MapPTR = (char*)malloc(sizeof(char) * BLOCKSIZE);
     initMPTR = MapPTR;
     if(total_blck < 1){
     	for(int i = 0; i < block_amt; i++){
@@ -122,14 +123,14 @@ myformat(const char *filename, int size)
 
     }
     //add root directory to dblock #0 starting after all the dblck
-    Directory * DirPTS = (Directory *) malloc(sizeof(Directory) * 16);
+    Directory * DirPTS = (Directory *) malloc(sizeof(Directory) * DIR_AMT);
     Directory *initDir = DirPTS;
     strcpy(DirPTS->f_name, ".");
     DirPTS->inode_num = 2;
     DirPTS++;
     strcpy(DirPTS->f_name, "..");
     DirPTS->inode_num = 2;
-    if(dwrite(my_fd, 66 + total_blck, initDir) == -1) {
+    if(dwrite(my_fd, DATA_OFFSET, initDir) < 0) {
       printf("assigning root dir fail\n");
       return -1;
     }

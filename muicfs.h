@@ -9,10 +9,18 @@
    Currently, it looks in the current directory.  You may want
    to replace this with an absolute path. */
 #define DISKFILE "disk.txt"
-
-#define INODE_OFFSET 2
-#define DMAP_OFFSET 66
+#define MAXFILE 256
+#define INODE_OFFSET IMAP_OFFSET + 1 //after imap and sblock
+#define DMAP_OFFSET INODE_OFFSET + TOTAL_IBLCK + 1 //after sblock, imap and Inode
 #define IMAP_OFFSET 1
+#define DATA_OFFSET DMAP_OFFSET + 1 //after everything
+
+#define DIR_AMT BLOCKSIZE/sizeof(Directory)
+#define INODE_AMT BLOCKSIZE/sizeof(Inode)
+
+#define TOTAL_IBLCK (MAXFILE * sizeof(Inode))/BLOCKSIZE
+
+
 /* You must use the following two calls to read from your "disk" */
 
 /* Read a block from disk */
@@ -42,7 +50,7 @@ typedef struct DirStruct
 {
 	char f_name[28];
 	int inode_num;
-	//each entry in dir is 32 byte therefore 1 Direcory will have max of 
+	//each entry in dir is 32 byte therefore 1 Directory will have max of
 	//16 files except if we link them together (do that later)
 } Directory;
 
