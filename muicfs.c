@@ -418,7 +418,8 @@ static int xmp_getattr(const char *path, struct stat *stbuf)
  */
 static int xmp_mkdir(const char *path, mode_t mode)
 {
-	int tup[2] = traverse_dir_w(path);
+	printf("Start creating directory \n");
+	int *tup = traverse_dir_w(path);
 	int dir_inum = tup[0];
 	int dir_dnum = tup[1];
 
@@ -448,6 +449,7 @@ static int xmp_mkdir(const char *path, mode_t mode)
 	}
 	free(init_dbuf);
 	//make a data block a into a Directory and insert inum of previous and current
+	//into . and ..
 	init_dbuf = (Directory*)malloc(sizeof(Directory) * DIR_AMT);
 	dir_buf = init_dbuf;
 
