@@ -10,15 +10,15 @@
    to replace this with an absolute path. */
 #define DISKFILE "disk.txt"
 #define MAXFILE 256
-#define INODE_OFFSET IMAP_OFFSET + 1 //after imap and sblock
-#define DMAP_OFFSET INODE_OFFSET + TOTAL_IBLCK + 1 //after sblock, imap and Inode
+#define INODE_OFFSET (IMAP_OFFSET + 1) //after imap and sblock
+#define DMAP_OFFSET (INODE_OFFSET + TOTAL_IBLCK + 1) //after sblock, imap and Inode
 #define IMAP_OFFSET 1
-#define DATA_OFFSET DMAP_OFFSET + 1 //after everything
+#define DATA_OFFSET (DMAP_OFFSET + 1) //after everything
 
-#define DIR_AMT BLOCKSIZE/sizeof(Directory)
-#define INODE_AMT BLOCKSIZE/sizeof(Inode)
+#define DIR_AMT (BLOCKSIZE/sizeof(Directory))
+#define INODE_AMT (BLOCKSIZE/sizeof(Inode))
 
-#define TOTAL_IBLCK (MAXFILE * sizeof(Inode))/BLOCKSIZE
+#define TOTAL_IBLCK ((MAXFILE * sizeof(Inode))/BLOCKSIZE)
 
 
 /* You must use the following two calls to read from your "disk" */

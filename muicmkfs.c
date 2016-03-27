@@ -97,7 +97,7 @@ myformat(const char *filename, int size)
     int total_blck = (block_amt/ BLOCKSIZE) + 1;
     MapPTR = (char*)malloc(sizeof(char) * BLOCKSIZE);
     initMPTR = MapPTR;
-    if(total_blck < 1){
+    if(total_blck < 2){
     	for(int i = 0; i < block_amt; i++){
     		if(i == 0){
     			//assign root dir
@@ -146,7 +146,7 @@ myformat(const char *filename, int size)
   sblockPT->total_inodes = 256;
   sblockPT->fs_size = size;
   sblockPT->dblck_start = DMAP_OFFSET + total_blck;
-  sblockPT->total_dblck = block_amt;
+  sblockPT->total_dblck = total_blck;
   if (dwrite(my_fd, 0, sblockPT) == -1) {
     printf("assigning super block fail\n");
     return -1;
